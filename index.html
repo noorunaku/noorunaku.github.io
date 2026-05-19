@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>슈팅 마스터 3D - 페널티 킥 게임</title>
+    <!-- Three.js 라이브러리 로드 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            color: #fff;
+            font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* UI 오버레이 */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 클릭 이벤트가 3D 캔버스로 통과하도록 함 */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 40px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+        }
+
+        .score-board {
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        .round-info {
+            font-size: 1.5rem;
+            color: #FFD700;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        .center-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4rem;
+            font-weight: bold;
+            text-align: center;
+            text-shadow: 0px 0px 20px rgba(0,0,0,1);
+            transition: opacity 0.3s;
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px 30px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1.1rem;
+            line-height: 1.5;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* GK 조준 미니 HUD */
+        #gk-hud {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 71px; /* 실제 골대 비율(14:5) 근사치 */
+            background: rgba(0,0,0,0.4);
+            border: 3px solid #eee;
+            border-bottom: 1px solid #aaa;
+            border-radius: 5px 5px 0 0;
+            box-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+
+        .hud-title {
+            position: absolute;
+            top: -25px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #FFD700;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px #000;
+        }
+
+        #hud-target {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: #FFEB3B;
+            border-radius: 50%;
+            transform: translate(-50%, 50%);
+            box-shadow: 0 0 8px #FFEB3B, 0 0 4px #fff inset;
+        }
+
+        /* 파워 게이지 */
+        #power-gauge-container {
+            position: absolute;
+            bottom: 50px;
+            right: 50px;
+            width: 40px;
+            height: 300px;
+            background: rgba(0,0,0,0.5);
+            border: 2px solid #fff;
+            border-radius: 5px;
+            display: none;
+        }
+
+        #power-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%;
+            background-color: #4CAF50;
+            transition: background-color 0.1s;
+        }
+
+        .gauge-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: rgba(255,255,255,0.7);
+        }
+
+        /* 타이틀 화면 */
+        #title-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 15, 30, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            z-index: 100;
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: #4CAF50;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+        }
+
+        .btn {
+            padding: 15px 50px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fff;
+            background-color: #e53935;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 20px;
+        }
+
+        .btn:hover { background-color: #ff5252; transform: scale(1.05); }
+        .hidden { display: none !important; }
+
+        /* 결과 표시 애니메이션용 색상 클래스 */
+        .msg-goal { color: #4CAF50; }
+        .msg-save { color: #FFEB3B; }
+        .msg-miss { color: #F44336; }
+        .msg-turn { color: #00BCD4; }
+
+    </style>
+</head>
+<body>
+
+<div id="game-container"></div>
+
+<div id="ui-layer" class="hidden">
+    <div class="top-bar">
+        <div class="score-board">
+            플레이어 <span id="score-player" style="color:#4CAF50;">0</span> : <span id="score-ai" style="color:#F44336;">0</span> AI
+        </div>
+        <div class="round-info" id="round-text">라운드 1 / 5</div>
+    </div>
+    
+    <div id="center-message" class="center-msg hidden"></div>
+
+    <div id="power-gauge-container">
+        <div class="gauge-line" style="bottom: 25%;"></div>
+        <div class="gauge-line" style="bottom: 80%;"></div>
+        <div id="power-fill"></div>
+    </div>
+
+    <div class="instructions" id="inst-kicker">
+        <strong>[키커 조작]</strong><br>
+        W, A, S, D : 조준점 이동<br>
+        G (누르고 있기) : 파워 게이지 충전<br>
+        G (떼기) : 슈팅!
+    </div>
+    <div class="instructions hidden" id="inst-gk">
+        <strong>[골키퍼 조작 (1인칭)]</strong><br>
+        W, A, S, D : 다이빙 방향(목표점) 이동<br>
+        H : 다이빙 (상대가 킥을 하면 타이밍 맞춰 누르세요!)
+    </div>
+
+    <div id="gk-hud" class="hidden">
+        <div class="hud-title">다이빙 목표 (미니맵)</div>
+        <div id="hud-target"></div>
+    </div>
+</div>
+
+<div id="title-screen">
+    <h1>슈팅 마스터 3D</h1>
+    <div style="font-size: 1.2rem; line-height: 1.8; text-align: center; margin-bottom: 30px;">
+        AI와 번갈아가며 키커와 골키퍼를 5번씩 진행합니다.<br>
+        가장 많은 골을 넣은 사람이 승리합니다!
+    </div>
+    <button id="start-btn" class="btn">게임 시작</button>
+</div>
+
+<script>
+    // --- 시스템 변수 ---
+    let scene, camera, renderer;
+    let ball, gkModel;
+    let targetMarker, gkTargetMarker;
+    let goalNetGroup;
+    
+    // --- 게임 상태 관리 ---
+    const MAX_ROUNDS = 5;
+    let currentRound = 1;
+    let scorePlayer = 0;
+    let scoreAI = 0;
+    
+    const ROLES = { PLAYER_KICK: 'PK', PLAYER_GK: 'PGK' };
+    let currentRole = ROLES.PLAYER_KICK;
+
+    const STATES = {
+        WAITING: 0,      // 턴 시작 전 대기
+        AIMING: 1,       // 키커 조준 중 (플레이어 or AI)
+        CHARGING: 2,     // 키커 파워 충전 중
+        SHOOTING: 3,     // 공이 날아가는 중 / 다이빙 중
+        RESULT: 4,       // 결과 표시
+        GAMEOVER: 5
+    };
+    let gameState = STATES.WAITING;
+
+    // --- 물리 및 오브젝트 변수 ---
+    const GOAL_Z = -50;
+    const BALL_START_Z = -10;
+    const GOAL_WIDTH = 14;
+    const GOAL_HEIGHT = 5;
+
+    let power = 0;
+    let powerDir = 1;
+    
+    let ballStartPos = new THREE.Vector3(0, 0.5, BALL_START_Z);
+    let ballTargetPos = new THREE.Vector3(0, 1, GOAL_Z);
+    let ballFlightProgress = 0;
+    let ballFlightSpeed = 0.02;
+
+    let gkStartPos = new THREE.Vector3(0, 1.5, GOAL_Z + 1);
+    let gkTargetPos = new THREE.Vector3(0, 1.5, GOAL_Z + 1);
+    let gkDiveProgress = 0;
+    let gkIsDiving = false;
+
+    // 키 입력 상태
+    const keys = { w:false, a:false, s:false, d:false, g:false, i:false, j:false, k:false, l:false, h:false };
+
+    // --- HTML 요소 ---
+    const uiLayer = document.getElementById('ui-layer');
+    const titleScreen = document.getElementById('title-screen');
+    const centerMsg = document.getElementById('center-message');
+    const powerGaugeContainer = document.getElementById('power-gauge-container');
+    const powerFill = document.getElementById('power-fill');
+    const instKicker = document.getElementById('inst-kicker');
+    const instGk = document.getElementById('inst-gk');
+    const scorePText = document.getElementById('score-player');
+    const scoreAText = document.getElementById('score-ai');
+    const roundText = document.getElementById('round-text');
+    
+    const gkHud = document.getElementById('gk-hud');
+    const hudTarget = document.getElementById('hud-target');
+
+    // --- 텍스처 생성 (캔버스 이용) ---
+    function createBallTexture() {
+        const c = document.createElement('canvas');
+        c.width = 128; c.height = 128;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,128,128);
+        ctx.fillStyle = '#000';
+        for(let i=0; i<4; i++) {
+            for(let j=0; j<2; j++) {
+                ctx.beginPath();
+                ctx.arc(32 + i*32, 32 + j*64, 15, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    // --- Three.js 초기화 ---
+    function initThreeJS() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // 하늘색 배경
+        scene.fog = new THREE.Fog(0x87CEEB, 30, 150);
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('game-container').appendChild(renderer.domElement);
+
+        // 조명 설정
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 100, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.top = 50;
+        dirLight.shadow.camera.bottom = -50;
+        dirLight.shadow.camera.left = -50;
+        dirLight.shadow.camera.right = 50;
+        scene.add(dirLight);
+
+        buildWorld();
+    }
+
+    function buildWorld() {
+        // 잔디밭 (Pitch)
+        const pitchGeo = new THREE.PlaneGeometry(100, 150);
+        const pitchMat = new THREE.MeshStandardMaterial({ color: 0x2E7D32, roughness: 0.8 });
+        const pitch = new THREE.Mesh(pitchGeo, pitchMat);
+        pitch.rotation.x = -Math.PI / 2;
+        pitch.receiveShadow = true;
+        scene.add(pitch);
+
+        // 페널티 라인 및 마크
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const pBoxGeo = new THREE.PlaneGeometry(30, 16);
+        const pBox = new THREE.Mesh(pBoxGeo, lineMat);
+        pBox.rotation.x = -Math.PI / 2;
+        pBox.position.set(0, 0.01, GOAL_Z + 8);
+        scene.add(pBox);
+        const pBoxInner = new THREE.Mesh(new THREE.PlaneGeometry(29, 15), pitchMat);
+        pBoxInner.rotation.x = -Math.PI / 2;
+        pBoxInner.position.set(0, 0.02, GOAL_Z + 8);
+        scene.add(pBoxInner);
+
+        const pMark = new THREE.Mesh(new THREE.CircleGeometry(0.3, 16), lineMat);
+        pMark.rotation.x = -Math.PI / 2;
+        pMark.position.set(0, 0.03, BALL_START_Z);
+        scene.add(pMark);
+
+        // 골대 (Goal)
+        const postMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee });
+        const postRadius = 0.2;
+        
+        const leftPost = new THREE.Mesh(new THREE.CylinderGeometry(postRadius, postRadius, GOAL_HEIGHT), postMat);
+        leftPost.position.set(-GOAL_WIDTH/2, GOAL_HEIGHT/2, GOAL_Z);
+        leftPost.castShadow = true;
+        
+        const rightPost = new THREE.Mesh(new THREE.CylinderGeometry(postRadius, postRadius, GOAL_HEIGHT), postMat);
+        rightPost.position.set(GOAL_WIDTH/2, GOAL_HEIGHT/2, GOAL_Z);
+        rightPost.castShadow = true;
+        
+        const crossBar = new THREE.Mesh(new THREE.CylinderGeometry(postRadius, postRadius, GOAL_WIDTH), postMat);
+        crossBar.rotation.z = Math.PI / 2;
+        crossBar.position.set(0, GOAL_HEIGHT, GOAL_Z);
+        crossBar.castShadow = true;
+
+        scene.add(leftPost, rightPost, crossBar);
+
+        // 축구공
+        const ballGeo = new THREE.SphereGeometry(0.4, 32, 32);
+        const ballMat = new THREE.MeshStandardMaterial({ map: createBallTexture(), roughness: 0.4 });
+        ball = new THREE.Mesh(ballGeo, ballMat);
+        ball.position.copy(ballStartPos);
+        ball.castShadow = true;
+        scene.add(ball);
+
+        // 골키퍼 모델 생성 (간단한 상자 조합)
+        gkModel = new THREE.Group();
+        const gkSkin = new THREE.MeshStandardMaterial({ color: 0xFFCCBC });
+        const gkShirt = new THREE.MeshStandardMaterial({ color: 0xFF5252 }); // 기본 색상
+        
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2, 0.8), gkShirt);
+        body.position.y = 1;
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), gkSkin);
+        head.position.y = 2.5;
+        const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2, 0.4), gkShirt);
+        lArm.position.set(-1.1, 1, 0);
+        const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2, 0.4), gkShirt);
+        rArm.position.set(1.1, 1, 0);
+        
+        gkModel.add(body, head, lArm, rArm);
+        gkModel.position.copy(gkStartPos);
+        gkModel.castShadow = true;
+        scene.add(gkModel);
+
+        // 타겟 마커 (키커 조준용 - 빨간 링)
+        const targetGeo = new THREE.RingGeometry(0.5, 0.6, 16);
+        const targetMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, transparent: true, opacity: 0.7 });
+        targetMarker = new THREE.Mesh(targetGeo, targetMat);
+        targetMarker.position.set(0, 2.5, GOAL_Z + 0.1);
+        scene.add(targetMarker);
+
+        // GK 타겟 마커 (플레이어 다이빙 조준용 - 노란 링)
+        const gkTargetGeo = new THREE.RingGeometry(0.5, 0.7, 16);
+        const gkTargetMat = new THREE.MeshBasicMaterial({ color: 0xFFFF00, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+        gkTargetMarker = new THREE.Mesh(gkTargetGeo, gkTargetMat);
+        gkTargetMarker.position.set(0, 1.5, GOAL_Z + 0.5);
+        scene.add(gkTargetMarker);
+    }
+
+    // 카메라 시점 설정
+    function setCameraView() {
+        if (currentRole === ROLES.PLAYER_KICK) {
+            // 키커 시점: 공 뒤에서 골대를 바라봄
+            camera.position.set(0, 3, BALL_START_Z + 15);
+            camera.lookAt(0, 2, GOAL_Z);
+            
+            targetMarker.visible = true;
+            gkTargetMarker.visible = false;
+            instKicker.classList.remove('hidden');
+            instGk.classList.add('hidden');
+            gkHud.classList.add('hidden');
+            
+            // 키커일 때 골키퍼 옷 색상(AI)을 노란색으로 복구 및 보이기
+            gkModel.visible = true;
+            gkModel.children[0].material.color.setHex(0xFFC107); 
+            gkModel.children[2].material.color.setHex(0xFFC107);
+            gkModel.children[3].material.color.setHex(0xFFC107);
+        } else {
+            // 골키퍼 시점: 1인칭 (골키퍼 얼굴 위치에서 공을 바라봄)
+            camera.position.set(gkStartPos.x, gkStartPos.y + 0.8, gkStartPos.z + 1);
+            camera.lookAt(ballStartPos.x, ballStartPos.y, ballStartPos.z);
+            
+            targetMarker.visible = false;
+            gkTargetMarker.visible = true;
+            instKicker.classList.add('hidden');
+            instGk.classList.remove('hidden');
+            gkHud.classList.remove('hidden');
+
+            // 1인칭이므로 화면을 가리지 않게 내 모델(GK)을 숨김
+            gkModel.visible = false;
+        }
+    }
+
+
+    // --- 이벤트 리스너 ---
+    window.addEventListener('keydown', (e) => {
+        let key = e.key.toLowerCase();
+        if (keys.hasOwnProperty(key)) keys[key] = true;
+
+        // 플레이어 키커 턴: G키 누름 시작 -> 차징 시작
+        if (currentRole === ROLES.PLAYER_KICK && gameState === STATES.AIMING && key === 'g') {
+            gameState = STATES.CHARGING;
+            powerGaugeContainer.style.display = 'block';
+        }
+        
+        // 플레이어 GK 턴: H키 누름 -> 다이빙 실행 (공이 날아오는 중에만 허용하거나, 슈팅 직전 허용)
+        if (currentRole === ROLES.PLAYER_GK && key === 'h' && !gkIsDiving) {
+            // 다이빙 트리거
+            executePlayerDive();
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        let key = e.key.toLowerCase();
+        if (keys.hasOwnProperty(key)) {
+            keys[key] = false;
+            
+            // 플레이어 키커 턴: G키 떼면 슈팅
+            if (currentRole === ROLES.PLAYER_KICK && gameState === STATES.CHARGING && key === 'g') {
+                executePlayerShoot();
+            }
+        }
+    });
+
+    document.getElementById('start-btn').addEventListener('click', () => {
+        titleScreen.classList.add('hidden');
+        uiLayer.classList.remove('hidden');
+        startGame();
+    });
+
+    window.addEventListener('resize', () => {
+        if(camera && renderer) {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    });
+
+
+    // --- 게임 로직 ---
+
+    function startGame() {
+        scorePlayer = 0;
+        scoreAI = 0;
+        currentRound = 1;
+        updateScoreBoard();
+        startRound();
+    }
+
+    function startRound() {
+        if (currentRound > MAX_ROUNDS) {
+            endGame();
+            return;
+        }
+        
+        roundText.innerText = `라운드 ${currentRound} / ${MAX_ROUNDS}`;
+        
+        // 턴 1: 플레이어가 키커
+        currentRole = ROLES.PLAYER_KICK;
+        resetPositions();
+        setCameraView();
+        
+        showCenterMessage("당신의 턴 (키커)", "msg-turn", 1500, () => {
+            gameState = STATES.AIMING;
+        });
+    }
+
+    function startAITurn() {
+        // 턴 2: 플레이어가 골키퍼
+        currentRole = ROLES.PLAYER_GK;
+        resetPositions();
+        setCameraView();
+        
+        showCenterMessage("AI 턴 (골키퍼 방어)", "msg-turn", 1500, () => {
+            gameState = STATES.AIMING;
+            // AI가 조준하고 차는 로직 스케줄링
+            setTimeout(executeAIShoot, 2000 + Math.random() * 1000); 
+        });
+    }
+
+    function resetPositions() {
+        ball.position.copy(ballStartPos);
+        ball.rotation.set(0,0,0);
+        gkModel.position.copy(gkStartPos);
+        gkModel.rotation.set(0,0,0);
+        
+        targetMarker.position.set(0, 2.5, GOAL_Z + 0.1);
+        gkTargetMarker.position.set(0, 1.5, GOAL_Z + 0.5);
+
+        power = 0;
+        powerDir = 1;
+        powerFill.style.height = '0%';
+        powerGaugeContainer.style.display = 'none';
+
+        ballFlightProgress = 0;
+        gkDiveProgress = 0;
+        gkIsDiving = false;
+        
+        keys.g = false;
+    }
+
+    function showCenterMessage(text, colorClass, duration, callback) {
+        centerMsg.className = `center-msg ${colorClass}`;
+        centerMsg.innerText = text;
+        centerMsg.classList.remove('hidden');
+        
+        setTimeout(() => {
+            centerMsg.classList.add('hidden');
+            if(callback) callback();
+        }, duration);
+    }
+
+    function updateScoreBoard() {
+        scorePText.innerText = scorePlayer;
+        scoreAText.innerText = scoreAI;
+    }
+
+    // --- 플레이어 액션 ---
+
+    function executePlayerShoot() {
+        gameState = STATES.SHOOTING;
+        powerGaugeContainer.style.display = 'none';
+
+        // 목표 지점 설정 (targetMarker의 위치 + 파워에 따른 오차)
+        let tx = targetMarker.position.x;
+        let ty = targetMarker.position.y;
+        
+        let isWeak = false;
+        
+        if (power < 25) {
+            ballFlightSpeed = 0.01; // 매우 느림
+            isWeak = true;
+        } else if (power > 80) {
+            ballFlightSpeed = 0.035; // 빠름
+            // 빗나갈 확률 (오차율 증가)
+            tx += (Math.random() - 0.5) * 4;
+            ty += (Math.random() - 0.5) * 3;
+        } else {
+            ballFlightSpeed = 0.025; // 적당함 (정확도 높음)
+        }
+        
+        ballTargetPos.set(tx, Math.max(0.4, ty), GOAL_Z); // 공이 땅을 뚫지 않게
+        
+        // AI 골키퍼의 반응 결정
+        decideAIDive(tx, ty, isWeak);
+    }
+
+    function executePlayerDive() {
+        if(gkIsDiving) return;
+        gkIsDiving = true;
+        gkDiveProgress = 0;
+        
+        // gkTargetMarker 위치로 다이빙 목표 설정
+        gkTargetPos.copy(gkTargetMarker.position);
+    }
+
+    // --- AI 로직 ---
+
+    function decideAIDive(ballTx, ballTy, isWeak) {
+        gkIsDiving = true;
+        gkDiveProgress = 0;
+        
+        if (isWeak) {
+            // 약한 슛은 100% 잡아냄
+            gkTargetPos.set(ballTx, Math.max(1, ballTy - 0.5), GOAL_Z);
+            return;
+        }
+
+        const predictChance = 0.35; // AI 예측 성공률 35%로 하향 조정 (기존 60%)
+        if (Math.random() < predictChance) {
+            // 정확히 예측
+            gkTargetPos.set(ballTx, Math.max(1, ballTy - 0.5), GOAL_Z);
+        } else {
+            // 엉뚱한 곳으로 다이빙
+            const oppositeX = ballTx > 0 ? -ballTx : Math.abs(ballTx) > 1 ? Math.abs(ballTx) : (Math.random()>0.5? 4 : -4);
+            gkTargetPos.set(oppositeX, 1.5 + (Math.random()-0.5)*2, GOAL_Z);
+        }
+    }
+
+    function executeAIShoot() {
+        if(gameState !== STATES.AIMING) return;
+        
+        gameState = STATES.SHOOTING;
+        
+        // AI가 랜덤한 타겟 설정 (골대 안쪽 범위)
+        // X: -6.5 ~ 6.5, Y: 0.5 ~ 4.5
+        const tx = (Math.random() - 0.5) * 12;
+        const ty = 0.5 + Math.random() * 3.5;
+        
+        // AI 파워 설정 (너무 약하지 않게 40 ~ 95 사이)
+        const aiPower = 40 + Math.random() * 55;
+        
+        if (aiPower > 80) {
+            ballFlightSpeed = 0.035;
+        } else {
+            ballFlightSpeed = 0.025;
+        }
+        
+        ballTargetPos.set(tx, ty, GOAL_Z);
+    }
+
+    // --- 프레임 업데이트 ---
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        updateLogic();
+        renderer.render(scene, camera);
+    }
+
+    function updateLogic() {
+        if (gameState === STATES.WAITING || gameState === STATES.GAMEOVER) return;
+
+        // 1. 조준 상태 (마커 이동)
+        if (gameState === STATES.AIMING || gameState === STATES.CHARGING) {
+            if (currentRole === ROLES.PLAYER_KICK) {
+                // 키커 마커 이동
+                const speed = 0.1;
+                if (keys.w) targetMarker.position.y += speed;
+                if (keys.s) targetMarker.position.y -= speed;
+                if (keys.a) targetMarker.position.x -= speed;
+                if (keys.d) targetMarker.position.x += speed;
+                
+                // 마커 제한 범위
+                targetMarker.position.x = Math.max(-GOAL_WIDTH/2 - 2, Math.min(GOAL_WIDTH/2 + 2, targetMarker.position.x));
+                targetMarker.position.y = Math.max(0.5, Math.min(GOAL_HEIGHT + 2, targetMarker.position.y));
+            } 
+            else if (currentRole === ROLES.PLAYER_GK) {
+                // 골키퍼 마커 이동 (1인칭 시점)
+                const speed = 0.15;
+                if (keys.w) gkTargetMarker.position.y += speed;
+                if (keys.s) gkTargetMarker.position.y -= speed;
+                if (keys.a) gkTargetMarker.position.x += speed; // 시점이 반대이므로 x축 반전
+                if (keys.d) gkTargetMarker.position.x -= speed; 
+                
+                gkTargetMarker.position.x = Math.max(-GOAL_WIDTH/2, Math.min(GOAL_WIDTH/2, gkTargetMarker.position.x));
+                gkTargetMarker.position.y = Math.max(0.5, Math.min(GOAL_HEIGHT, gkTargetMarker.position.y));
+                
+                if (!gkIsDiving) {
+                    // 미니맵 HUD 업데이트
+                    // X: 7(왼쪽 끝) -> 0%, -7(오른쪽 끝) -> 100%
+                    const pctX = (7 - gkTargetMarker.position.x) / 14 * 100;
+                    // Y: 0(바닥) -> 0%, 5(천장) -> 100%
+                    const pctY = (gkTargetMarker.position.y / GOAL_HEIGHT) * 100;
+                    
+                    hudTarget.style.left = pctX + '%';
+                    hudTarget.style.bottom = pctY + '%';
+                    
+                    // 자연스러운 1인칭 카메라 패닝 (목표점 방향으로 고개 돌리기)
+                    const lookX = ballStartPos.x + gkTargetMarker.position.x * 1.5; 
+                    const lookY = ballStartPos.y + gkTargetMarker.position.y * 0.8;
+                    camera.lookAt(lookX, lookY, ballStartPos.z);
+                }
+            }
+
+            // 파워 차징 (키커일 때만)
+            if (gameState === STATES.CHARGING) {
+                power += 2 * powerDir;
+                if (power >= 100) { power = 100; powerDir = -1; }
+                if (power <= 0) { power = 0; powerDir = 1; }
+                
+                powerFill.style.height = power + '%';
+                if (power < 25) powerFill.style.backgroundColor = '#9E9E9E';
+                else if (power > 80) powerFill.style.backgroundColor = '#F44336';
+                else powerFill.style.backgroundColor = '#4CAF50';
+            }
+        }
+
+        // 2. 슈팅 및 다이빙 애니메이션
+        if (gameState === STATES.SHOOTING) {
+            // 공 이동
+            if (ballFlightProgress < 1) {
+                ballFlightProgress += ballFlightSpeed;
+                if (ballFlightProgress > 1) ballFlightProgress = 1;
+                
+                const easeOut = 1 - Math.pow(1 - ballFlightProgress, 2);
+                
+                // 곡선 계산 (포물선)
+                const arcHeight = Math.max(0, ballStartPos.y - ballTargetPos.y) + 2; 
+                const arc = Math.sin(ballFlightProgress * Math.PI) * arcHeight;
+
+                ball.position.x = ballStartPos.x + (ballTargetPos.x - ballStartPos.x) * ballFlightProgress;
+                ball.position.z = ballStartPos.z + (ballTargetPos.z - ballStartPos.z) * ballFlightProgress;
+                ball.position.y = ballStartPos.y + (ballTargetPos.y - ballStartPos.y) * ballFlightProgress + arc;
+                
+                // 공 회전
+                ball.rotation.x -= 0.2;
+            }
+
+            // 골키퍼 이동 (다이빙을 시작한 경우)
+            if (gkIsDiving && gkDiveProgress < 1) {
+                gkDiveProgress += 0.04;
+                if (gkDiveProgress > 1) gkDiveProgress = 1;
+                
+                const easeOut = 1 - Math.pow(1 - gkDiveProgress, 3);
+                
+                // 골키퍼 몸체 위치 변경
+                gkModel.position.x = gkStartPos.x + (gkTargetPos.x - gkStartPos.x) * easeOut;
+                gkModel.position.y = gkStartPos.y + (gkTargetPos.y - gkStartPos.y) * easeOut;
+                
+                // 몸체 회전 연출
+                const rotateZ = (gkTargetPos.x < 0) ? Math.PI/4 : (gkTargetPos.x > 0 ? -Math.PI/4 : 0);
+                gkModel.rotation.z = rotateZ * easeOut;
+            }
+            
+            // 공이 골 라인(GOAL_Z)에 도달했는지 확인
+            if (ballFlightProgress === 1) {
+                evaluateResult();
+            }
+
+            // --- 1인칭 카메라 다이빙 추적 효과 (골키퍼 턴) ---
+            if (currentRole === ROLES.PLAYER_GK) {
+                camera.position.x = gkModel.position.x;
+                camera.position.y = Math.max(0.5, gkModel.position.y + 0.8); // 땅을 뚫고 들어가지 않게 방지
+                camera.position.z = gkModel.position.z + 1;
+                camera.lookAt(ball.position); // 항상 공을 주시
+                gkHud.classList.add('hidden'); // 다이빙 시작 시 미니맵 숨김
+            }
+        }
+    }
+
+    function evaluateResult() {
+        gameState = STATES.RESULT;
+
+        const isGoalX = ball.position.x > -GOAL_WIDTH/2 + 0.5 && ball.position.x < GOAL_WIDTH/2 - 0.5;
+        const isGoalY = ball.position.y > 0 && ball.position.y < GOAL_HEIGHT - 0.5;
+        
+        // 골키퍼와의 충돌(선방) 판정 (2D 평면상 거리 검사)
+        const dist = Math.hypot(ball.position.x - gkModel.position.x, ball.position.y - gkModel.position.y);
+        const saveRadius = 2.5; // 방어 반경
+
+        let resultType = ""; // 'GOAL', 'SAVE', 'MISS'
+        let msg = "";
+        let colorCls = "";
+
+        if (!isGoalX || !isGoalY) {
+            resultType = "MISS";
+            msg = "실축!";
+            colorCls = "msg-miss";
+        } else if (dist < saveRadius) {
+            resultType = "SAVE";
+            msg = "선방!";
+            colorCls = "msg-save";
+        } else {
+            resultType = "GOAL";
+            msg = "골!!";
+            colorCls = "msg-goal";
+        }
+
+        // 스코어 반영
+        if (resultType === "GOAL") {
+            if (currentRole === ROLES.PLAYER_KICK) scorePlayer++;
+            else scoreAI++;
+            updateScoreBoard();
+        }
+
+        showCenterMessage(msg, colorCls, 2000, () => {
+            // 턴 교체 로직
+            if (currentRole === ROLES.PLAYER_KICK) {
+                startAITurn(); // 플레이어 공격 끝났으니 AI 공격 시작
+            } else {
+                // 한 라운드 종료
+                currentRound++;
+                startRound();
+            }
+        });
+    }
+
+    function endGame() {
+        gameState = STATES.GAMEOVER;
+        uiLayer.classList.add('hidden');
+        titleScreen.classList.remove('hidden');
+        
+        let finalMsg = "";
+        if (scorePlayer > scoreAI) finalMsg = "승리했습니다! 🎉";
+        else if (scorePlayer < scoreAI) finalMsg = "패배했습니다... 😢";
+        else finalMsg = "무승부입니다! 🤝";
+
+        document.querySelector('#title-screen h1').innerText = "게임 종료";
+        document.querySelector('#title-screen div').innerHTML = `
+            최종 스코어<br>
+            <span style="color:#4CAF50; font-size:2rem;">플레이어 ${scorePlayer}</span> : <span style="color:#F44336; font-size:2rem;">${scoreAI} AI</span><br><br>
+            ${finalMsg}
+        `;
+        document.getElementById('start-btn').innerText = "다시 플레이";
+    }
+
+    // --- 실행 ---
+    window.onload = () => {
+        initThreeJS();
+        animate(); // 초기 렌더링 시작
+    };
+
+</script>
+</body>
+</html>
